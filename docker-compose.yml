@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------
+  # 1. Головний вузол (Leader)
+  # ----------------------------------------
+  node-leader:
+    image: ucu-ds-pract:latest
+    container_name: node-leader
+    ports:
+      # Прокидаємо порт на хост для зовнішніх REST-запитів
+      - "8081:8080"
+    environment:
+      # Змінна середовища, яка передає режим роботи (ЛИШЕ ЦЕЙ ВУЗОЛ БУДЕ ЛІДЕРОМ)
+      NODE_ROLE: LEADER
+      # Список вузлів для самоідентифікації та спілкування
+      NODE_ID: node-leader
+      # Адреси інших вузлів (використовуйте імена сервісів Docker Compose)
+      PEER_NODES: "node-follower-1:8080,node-follower-2:8080"
+    networks:
+      - distributed-net
+
+  # ----------------------------------------
+  # 2. Вузол-послідовник 1 (Follower)
+  # ----------------------------------------
+  node-follower-1:
+    image: ucu-ds-pract:latest
+    container_name: node-follower-1
+    ports:
+      - "8082:8080"
+    environment:
+      NODE_ROLE: FOLLOWER
+      NODE_ID: node-follower-1
+      PEER_NODES: "node-leader:8080,node-follower-2:8080"
+    networks:
+      - distributed-net
+
+  # ----------------------------------------
+  # 3. Вузол-послідовник 2 (Follower)
+  # ----------------------------------------
+  node-follower-2:
+    image: ucu-ds-pract:latest
+    container_name: node-follower-2
+    ports:
+      - "8083:8080"
+    environment:
+      NODE_ROLE: FOLLOWER
+      NODE_ID: node-follower-2
+      PEER_NODES: "node-leader:8080,node-follower-1:8080"
+    networks:
+      - distributed-net
+
+networks:
+  distributed-net:
+    driver: bridge
