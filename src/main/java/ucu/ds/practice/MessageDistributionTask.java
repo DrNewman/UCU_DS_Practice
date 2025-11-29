@@ -9,25 +9,24 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class MessageDistributionTask {
-    private static final int NODES_CAPACITY = 3;
-
     private static final Logger logger = LoggerFactory.getLogger(MessageDistributionTask.class);
 
-    private final String message;
-    private volatile String status; // volatile для видимості змін між потоками
+    private final Message message;
+    private volatile String status;
     private final List<String> nodesAccepted = new ArrayList<>();
-    private final int nodesAcceptedThreshold = NODES_CAPACITY;
+    private final int nodesAcceptedThreshold;
 
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    public MessageDistributionTask(String message) {
+    public MessageDistributionTask(Message message, int nodesAcceptedThreshold) {
         this.message = message;
+        this.nodesAcceptedThreshold = nodesAcceptedThreshold;
         setStatus("NEW");
     }
 
     public void setStatus(String status) {
         this.status = status;
-        logger.info("Task with message {} changed status on: {}", message, status);
+        logger.info("Task with {} changed status on '{}'", message, status);
     }
 
     public String getStatus() {
@@ -39,7 +38,7 @@ public class MessageDistributionTask {
     }
 
     public void addNodeAccepted(String node) {
-        logger.info("Task with message {} has been accepted by node: {}", message, node);
+        logger.info("Task with {} has been accepted by node <{}>", message, node);
         synchronized (nodesAccepted) {
             if (nodesAccepted.contains(node)) {
                 return;
@@ -58,13 +57,13 @@ public class MessageDistributionTask {
      * @return true якщо задача виконана успішно, false якщо вийшов тайм-аут
      */
     public boolean waitForCompletion(long timeoutSeconds) throws InterruptedException {
-        logger.info("Waiting for completion of the task with message '{}' started", message);
+        logger.info("Waiting for completion of the task with {} started", message);
         boolean result = latch.await(timeoutSeconds, TimeUnit.SECONDS);
-        logger.info("Waiting for completion of the task with message '{}' ended. Result: {}", message, result);
+        logger.info("Waiting for completion of the task with {} ended. Result: {}", message, result);
         return result;
     }
 
-    public String getMessage() {
+    public Message getMessage() {
         return message;
     }
 }

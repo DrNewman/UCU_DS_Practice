@@ -37,13 +37,15 @@ public class NewMessagesProcessor {
         int currentTasksCount = internalData.getTasks().size();
         if (currentTasksCount > processedTasksCount) {
             int newCount = currentTasksCount - processedTasksCount;
-            logger.info("New messages ({}) to process on node: {} have been found", newCount, internalData.getNodeId());
+            logger.info("New messages ({}) to process on node <{}> have been found",
+                    newCount, internalData.getNodeId());
             
-            List<MessageDistributionTask> notProcessedTasks = internalData.getTasks().subList(processedTasksCount, currentTasksCount);
+            List<MessageDistributionTask> notProcessedTasks =
+                    internalData.getTasks().subList(processedTasksCount, currentTasksCount);
             notProcessedTasks.forEach(this::processTask);
             
             processedTasksCount = currentTasksCount;
-            logger.info("New messages processing on node: {} has been completed", internalData.getNodeId());
+            logger.info("New messages processing on node <{}> has been completed", internalData.getNodeId());
         }
     }
 
@@ -63,12 +65,12 @@ public class NewMessagesProcessor {
                 String url = "http://" + nodeAddress + "/save_message";
             
                 HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.TEXT_PLAIN);
-                HttpEntity<String> request = new HttpEntity<>(task.getMessage(), headers);
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Message> request = new HttpEntity<>(task.getMessage(), headers);
 
                 ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody().equals("OK")) {
+                if (response.getStatusCode().is2xxSuccessful() && "OK".equals(response.getBody())) {
                     task.addNodeAccepted(nodeAddress);
                 }
             } catch (RestClientException e) {
