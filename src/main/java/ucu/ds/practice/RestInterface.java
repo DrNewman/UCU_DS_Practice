@@ -19,26 +19,29 @@ public class RestInterface {
     }
 
     @PostMapping("/new_message")
-    public String newMessage(@RequestBody String message) {
-        logger.info("Received new message: {} to node: {}", message, internalData.getNodeId());
+    public String newMessage(@RequestBody String message,
+                             @RequestParam(value = "write_concern", defaultValue = "3") Integer writeConcern) {
+        logger.info("Received new message: {} to node <{}> with write_concern: {}",
+                message, internalData.getNodeId(), writeConcern);
         if (internalData.isFollower()) {
             return "Follower cannot receive new messages from clients.";
         }
         if (message == null || message.isBlank()) {
             return "Message is empty.";
         }
-        MessageDistributionTask task = new MessageDistributionTask(message);
-        logger.info("Task with message: {} on node: {} has been added to process", message, internalData.getNodeId());
+        Message newMessage = new Message(internalData.getNextMessageId(), message);
+        MessageDistributionTask task = new MessageDistributionTask(newMessage, writeConcern);
+        logger.info("Task with {} on node <{}> has been added to process", newMessage, internalData.getNodeId());
         internalData.addTask(task);
-        
+
         try {
             boolean completed = task.waitForCompletion(CLIENT_REQUEST_TIMEOUT_SEC);
             if (completed) {
-                logger.info("Message: {} on node: {} has been successfully processed", message, internalData.getNodeId());
-                return "Message received and distributed to all nodes";
+                logger.info("{} on node <{}> has been successfully processed", newMessage, internalData.getNodeId());
+                return "OK. Message received and distributed to nodes";
             } else {
-                logger.info("Message: {} on node: {} has been skipped by timeout", message, internalData.getNodeId());
-                return "Message received, but distribution timed out (not all nodes responded)";
+                logger.info("{} on node <{}> has been skipped by timeout", newMessage, internalData.getNodeId());
+                return "NO. Message received, but distribution timed out";
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -47,21 +50,21 @@ public class RestInterface {
     }
 
     @GetMapping("/all_saved_messages")
-    public List<String> getAllSavedMessages() {
+    public List<Message> getAllSavedMessages() {
         return internalData.getMessages();
     }
 
     @PostMapping("/save_message")
-    public String saveMessage(@RequestBody String message) {
-        logger.info("Received message: {} to save on node: {}", message, internalData.getNodeId());
+    public String saveMessage(@RequestBody Message message) {
+        logger.info("Received {} to save on node <{}>", message, internalData.getNodeId());
         if (internalData.isLeader()) {
             return "Leader cannot save messages directly.";
         }
-        if (message == null || message.isBlank()) {
+        if (message == null || message.getMessage() == null || message.getMessage().isBlank()) {
             return "Message is empty.";
         }
         internalData.saveMessage(message);
-        logger.info("Message: {} on node: {} has been successfully saved", message, internalData.getNodeId());
+        logger.info("{} on node <{}> has been successfully saved", message, internalData.getNodeId());
         return "OK";
     }
 }
