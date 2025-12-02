@@ -27,4 +27,12 @@ public class Message implements Comparable<Message> {
     public String toString() {
         return "Message{" + "id=" + id + ", message='" + message + '\'' + '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Message message1 = (Message) o;
+        return id == message1.id;
+    }
 }

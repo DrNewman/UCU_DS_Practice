@@ -46,8 +46,10 @@ public class MessageDistributionTask {
             nodesAccepted.add(node);
             if (!isDone() && nodesAccepted.size() >= nodesAcceptedThreshold) {
                 setStatus("DONE");
-                latch.countDown(); 
             }
+        }
+        if (isDone()) {
+            latch.countDown();
         }
     }
 

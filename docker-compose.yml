@@ -5,6 +5,9 @@ services:
   # 1. Головний вузол (Leader)
   # ----------------------------------------
   node-leader:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: ucu-ds-pract:latest
     container_name: node-leader
     ports:
@@ -26,12 +29,15 @@ services:
   node-follower-1:
     image: ucu-ds-pract:latest
     container_name: node-follower-1
+    depends_on:
+      - node-leader
     ports:
       - "8082:8080"
     environment:
       NODE_ROLE: FOLLOWER
       NODE_ID: node-follower-1
       PEER_NODES: "node-leader:8080,node-follower-2:8080"
+#      NODE_DELAY_SEC: 60
     networks:
       - distributed-net
 
@@ -41,12 +47,15 @@ services:
   node-follower-2:
     image: ucu-ds-pract:latest
     container_name: node-follower-2
+    depends_on:
+      - node-leader
     ports:
       - "8083:8080"
     environment:
       NODE_ROLE: FOLLOWER
       NODE_ID: node-follower-2
       PEER_NODES: "node-leader:8080,node-follower-1:8080"
+      NODE_DELAY_SEC: 10
     networks:
       - distributed-net
 
