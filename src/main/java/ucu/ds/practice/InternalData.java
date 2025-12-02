@@ -3,8 +3,10 @@ package ucu.ds.practice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,6 +34,9 @@ public class InternalData {
     private String peerNodesRaw;
     private List<String> nodes = Collections.emptyList();
 
+    @Value("${NODE_DELAY_SEC:0}")
+    private Integer nodeDelaySec;
+
     private final AtomicInteger messageIdGenerator = new AtomicInteger(0);
 
     @PostConstruct
@@ -49,15 +54,14 @@ public class InternalData {
     }
 
     public void saveMessage(Message message) {
-        // Трішки магії для перевірки завдання
-        // Якщо повідомлення містить фрагмент "wait" та фрагмент з id поточної ноди, збереження стає на паузу на 60 сек.
-        if (message.getMessage().contains("wait") && message.getMessage().contains(nodeId)) {
+        if (nodeDelaySec > 0) {
             logger.info("{} should be saved with delay on node <{}>", message, getNodeId());
             try {
-                Thread.sleep(60000);
+                Thread.sleep(nodeDelaySec * 1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logger.warn("Sleep interrupted for {}", message);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error: Operation interrupted");
             }
         }
 

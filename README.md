@@ -1,22 +1,18 @@
-Для запуску проекту потрібно з кореневого каталога проекту ("untitled"):
+Для запуску проєкт потрібно з кореневого каталогу проєкту:
 
-1. Виконати збірку docker-image:
-
-docker build -t ucu-ds-pract .
-
-2. Запустити ноди у Docker:
+1. Виконати збірку docker-image та запуск ноди у Docker:
 
 docker compose up
 
-Для завершення роботи з застосунком, - Ctrl+C у консолі, та команда очищення усіх зупинених контейнерів:
+2. Для завершення роботи з застосунком, - Ctrl+C у консолі, та команда очищення усіх зупинених контейнерів:
 
 docker container prune
 
 
-Після старту роботи застосунку взаємодія з нодами відбувається через GET- та POST-запити (наприклад через Postman).
+Після старту роботи застосунку взаємодія з нодами відбувається через GET- та POST-запити (наприклад, через Postman):
 
-GET {{base_url}}/new_message - відправка нового повідомлення для зберігання. Працює тільки для leader-ноди. Body - row text.
-POST {{base_url}}/all_saved_messages - отримання списку всіх збережених на ноді повідомлень
+POST {{base_url}}/new_message - відправка нового повідомлення для зберігання. Працює тільки для leader-ноди. Body - row text.
+GET {{base_url}}/all_saved_messages - отримання списку всіх збережених на ноді повідомлень
 
 У якості {{base_url}} доступні:
 1. http://localhost:8081 - node-leader
@@ -28,11 +24,25 @@ POST {{base_url}}/all_saved_messages - отримання списку всіх 
 2. http://localhost:8082/all_saved_messages - node-follower-1
 3. http://localhost:8083/all_saved_messages - node-follower-2
 
-Для провокації затримки у збереженні повідомлення (60 сек.) на follower-ноді потрібно що б у тескті повідомлення був фрагмент "wait" та фрагмент з id ноди ("node-follower-1" або "node-follower-2"), на якій потрібно спровокувати затримку.
-Нприклад: "testMSGwaitOnnode-follower-1"
 
-Write concern задається як параметр write_concern запиту /new_message
+Або через curl-команди:
 
-Для перевірки упорядкумання повідомлень у нодах можна послудовно відправити на leader-ноду повідомлення:
-"First", "Second_wait_node-follower-1", "Third" де write concern для другого повідомлення не більше 2.
-Після 3 повідомлення на нодах node-leader та node-follower-2 будуть всі 3 повідомлення, як відправлялись. На ноді node-follower-1 тільки перше та третє. Через 60 сек після відправки другого повідомлення, друге повідомлення також з'яаиться на ноді node-follower-2, на другому місці.
+1. Відправка повідомлення на leader-ноду (стандартний write_concern=3)
+
+curl -X POST -H "Content-Type: text/plain" http://localhost:8081/new_message -d "msg1"
+
+1.1 Відправка повідомлення з конкретним write_concern (наприклад, 2)
+
+curl -X POST -H "Content-Type: text/plain" "http://localhost:8081/new_message?write_concern=2" -d "msg2_wc2"
+
+2. Перевірка повідомлень на leader-ноді
+
+curl http://localhost:8081/all_saved_messages
+
+3. Перевірка повідомлень на follower-ноді 1
+
+curl http://localhost:8082/all_saved_messages
+
+4. Перевірка повідомлень на follower-ноді 2
+
+curl http://localhost:8083/all_saved_messages
