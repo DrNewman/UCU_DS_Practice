@@ -18,9 +18,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class InternalData {
-
+    private static final String DEFAULT_PORT = "8080";
     private static final Logger logger = LoggerFactory.getLogger(InternalData.class);
 
+    private String status = "FAST";
     private final Set<Message> messages = new ConcurrentSkipListSet<>();
     private final List<MessageDistributionTask> tasks = new CopyOnWriteArrayList<>();
 
@@ -32,7 +33,10 @@ public class InternalData {
 
     @Value("${PEER_NODES:}")
     private String peerNodesRaw;
-    private List<String> nodes = Collections.emptyList();
+    private List<String> externalNodes = Collections.emptyList();
+
+    @Value("${PORT:" + DEFAULT_PORT + "}")
+    private String port;
 
     @Value("${NODE_DELAY_SEC:0}")
     private Integer nodeDelaySec;
@@ -42,10 +46,13 @@ public class InternalData {
     @PostConstruct
     public void initPeerNodes() {
         if (peerNodesRaw != null && !peerNodesRaw.isBlank()) {
-            nodes = List.of(peerNodesRaw.split(","));
+            externalNodes = List.of(peerNodesRaw.split(","));
+        }
+        if (!nodeDelaySec.equals(0)) {
+            status = "SLOW";
         }
         if (isLeader()) {
-            logger.info("Leader-node has followers: {}", nodes);
+            logger.info("Leader-node has followers: {}", externalNodes);
         }
     }
 
@@ -54,7 +61,7 @@ public class InternalData {
     }
 
     public void saveMessage(Message message) {
-        if (nodeDelaySec > 0) {
+        if (status.equals("SLOW") && nodeDelaySec > 0) {
             logger.info("{} should be saved with delay on node <{}>", message, getNodeId());
             try {
                 Thread.sleep(nodeDelaySec * 1000);
@@ -69,8 +76,39 @@ public class InternalData {
         logger.info("{} on node <{}> has been saved", message, getNodeId());
     }
 
-    public List<Message> getMessages() {
+    public List<Message> getAllMessages() {
         return new ArrayList<>(messages);
+    }
+
+    public List<Message> getTotalOrderedMessages() {
+        List<Message> allMessages = getAllMessages();
+        if (allMessages.isEmpty() || allMessages.get(allMessages.size() - 1).getId() == allMessages.size()) {
+            return allMessages;
+        }
+        if (allMessages.get(0).getId() != 1) {
+            return Collections.emptyList();
+        }
+        int counter = 1;
+        while (allMessages.get(counter - 1).getId() == counter) {
+            counter++;
+        }
+        return allMessages.subList(0, counter);
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getPort() {
+        return port;
+    }
+
+    public void setNodeDelaySec(Integer nodeDelaySec) {
+        this.nodeDelaySec = nodeDelaySec;
     }
 
     public void addTask(MessageDistributionTask task) {
@@ -93,7 +131,7 @@ public class InternalData {
         return nodeId;
     }
 
-    public List<String> getNodes() {
-        return nodes;
+    public List<String> getExternalNodes() {
+        return externalNodes;
     }
 }

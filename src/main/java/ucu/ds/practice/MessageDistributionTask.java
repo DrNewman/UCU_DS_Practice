@@ -3,8 +3,8 @@ package ucu.ds.practice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -13,14 +13,15 @@ public class MessageDistributionTask {
 
     private final Message message;
     private volatile String status;
-    private final List<String> nodesAccepted = new ArrayList<>();
+    private final List<MessageDelivery> deliveries;
     private final int nodesAcceptedThreshold;
 
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    public MessageDistributionTask(Message message, int nodesAcceptedThreshold) {
+    public MessageDistributionTask(Message message, int nodesAcceptedThreshold, List<String> nodes) {
         this.message = message;
         this.nodesAcceptedThreshold = nodesAcceptedThreshold;
+        deliveries = nodes.stream().map(MessageDelivery::new).toList();
         setStatus("NEW");
     }
 
@@ -33,22 +34,31 @@ public class MessageDistributionTask {
         return status;
     }
 
+    public boolean isConcerned() {
+        return "CONCERNED".equals(status) || "DONE".equals(status);
+    }
+
     public boolean isDone() {
         return "DONE".equals(status);
     }
 
     public void addNodeAccepted(String node) {
         logger.info("Task with {} has been accepted by node <{}>", message, node);
-        synchronized (nodesAccepted) {
-            if (nodesAccepted.contains(node)) {
-                return;
+        synchronized (deliveries) {
+            Optional<MessageDelivery> delivery = deliveries.stream()
+                    .filter(d -> d.getNode().equals(node))
+                    .findFirst();
+            if (delivery.isPresent()) {
+                delivery.get().delivered();;
             }
-            nodesAccepted.add(node);
-            if (!isDone() && nodesAccepted.size() >= nodesAcceptedThreshold) {
+            int done = getDeliveriesInStatus("DELIVERED").size();
+            if (done == deliveries.size()) {
                 setStatus("DONE");
+            } else if (done >= nodesAcceptedThreshold) {
+                setStatus("CONCERNED");
             }
         }
-        if (isDone()) {
+        if (isConcerned()) {
             latch.countDown();
         }
     }
@@ -67,5 +77,11 @@ public class MessageDistributionTask {
 
     public Message getMessage() {
         return message;
+    }
+
+    public List<MessageDelivery> getDeliveriesInStatus(String status) {
+        synchronized (deliveries) {
+            return deliveries.stream().filter(d -> d.getStatus().equals(status)).toList();
+        }
     }
 }
