@@ -3,10 +3,8 @@ package ucu.ds.practice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +13,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 @Component
 public class InternalData {
@@ -23,7 +22,7 @@ public class InternalData {
 
     private String status = "FAST";
     private final Set<Message> messages = new ConcurrentSkipListSet<>();
-    private final List<MessageDistributionTask> tasks = new CopyOnWriteArrayList<>();
+    private final List<MessageReplicationTask> tasks = new CopyOnWriteArrayList<>();
 
     @Value("${NODE_ROLE:LEADER}")
     private String nodeRole;
@@ -33,7 +32,8 @@ public class InternalData {
 
     @Value("${PEER_NODES:}")
     private String peerNodesRaw;
-    private List<String> externalNodes = Collections.emptyList();
+    private List<Node> externalNodes = Collections.emptyList();
+    private Node currentNode;
 
     @Value("${PORT:" + DEFAULT_PORT + "}")
     private String port;
@@ -46,7 +46,10 @@ public class InternalData {
     @PostConstruct
     public void initPeerNodes() {
         if (peerNodesRaw != null && !peerNodesRaw.isBlank()) {
-            externalNodes = List.of(peerNodesRaw.split(","));
+            currentNode = new Node(nodeId, port);
+            externalNodes = Stream.of(peerNodesRaw.split(","))
+                    .map(id -> new Node(id, port))
+                    .toList();
         }
         if (!nodeDelaySec.equals(0)) {
             status = "SLOW";
@@ -61,16 +64,6 @@ public class InternalData {
     }
 
     public void saveMessage(Message message) {
-        if (status.equals("SLOW") && nodeDelaySec > 0) {
-            logger.info("{} should be saved with delay on node <{}>", message, getNodeId());
-            try {
-                Thread.sleep(nodeDelaySec * 1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.warn("Sleep interrupted for {}", message);
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error: Operation interrupted");
-            }
-        }
 
         messages.add(message);
         logger.info("{} on node <{}> has been saved", message, getNodeId());
@@ -107,15 +100,19 @@ public class InternalData {
         return port;
     }
 
+    public Integer getNodeDelaySec() {
+        return nodeDelaySec;
+    }
+
     public void setNodeDelaySec(Integer nodeDelaySec) {
         this.nodeDelaySec = nodeDelaySec;
     }
 
-    public void addTask(MessageDistributionTask task) {
+    public void addTask(MessageReplicationTask task) {
         tasks.add(task);
     }
     
-    public List<MessageDistributionTask> getTasks() {
+    public List<MessageReplicationTask> getTasks() {
         return tasks;
     }
 
@@ -131,7 +128,29 @@ public class InternalData {
         return nodeId;
     }
 
-    public List<String> getExternalNodes() {
+    public Node getCurrentNode() {
+        return currentNode;
+    }
+
+    public List<Node> getExternalNodes() {
         return externalNodes;
+    }
+
+    public List<Node> getAllNodes() {
+        ArrayList<Node> nodes = new ArrayList<>(externalNodes);
+        nodes.add(currentNode);
+        return nodes;
+    }
+
+    public Node getNodeById(String id) {
+        return getExternalNodes().stream()
+                .filter(n -> id.equals(n.getId()))
+                .findFirst().orElse(null);
+    }
+
+    public boolean hasNoQuorum() {
+        return externalNodes.stream()
+                .filter(node -> !node.getHealthStatus().equals("UNHEALTHY")) // відбираємо робочі ноди
+                .count() < (getAllNodes().size() / 2);
     }
 }

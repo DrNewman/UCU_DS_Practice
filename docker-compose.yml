@@ -40,7 +40,7 @@ services:
       NODE_ID: node-follower-1
       PORT: 8080
       PEER_NODES: "node-leader,node-follower-2"
-#      NODE_DELAY_SEC: 60
+      NODE_DELAY_SEC: 5
     networks:
       - distributed-net
 

@@ -16,8 +16,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Service
-public class MessagesDistributor {
-    private static final Logger logger = LoggerFactory.getLogger(MessagesDistributor.class);
+public class MessagesReplicationService {
+    private static final Logger logger = LoggerFactory.getLogger(MessagesReplicationService.class);
 
     @Autowired
     private InternalData internalData;
@@ -26,23 +26,22 @@ public class MessagesDistributor {
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Scheduled(fixedRate = 1000)
-    public void distribute() {
+    public void tryToReplicateToFollowers() {
         if (!internalData.isLeader()) {
             return;
         }
 
-        List<MessageDistributionTask> activeTasks = internalData.getTasks().stream()
+        internalData.getTasks().stream()
                 .filter(t -> !t.isDone())
-                .toList();
-        activeTasks.forEach(this::processTask);
+                .forEach(this::tryToReplicateToFollowers);
     }
 
-    public void processTask(MessageDistributionTask task) {
+    public void tryToReplicateToFollowers(MessageReplicationTask task) {
         if ("NEW".equals(task.getStatus())) {
             // Зберігаємо повідомлення локально (у лідера)
             task.setStatus("IN_PROGRESS");
             internalData.saveMessage(task.getMessage());
-            task.addNodeAccepted(internalData.getNodeId());
+            task.addNodeAccepted(internalData.getCurrentNode());
         }
 
         // Розсилаємо іншим
@@ -52,13 +51,15 @@ public class MessagesDistributor {
         inProgressDeliveries.stream()
                 .filter(MessageDelivery::isTimeToTrySend)
                 .peek(MessageDelivery::trySend)
+                .peek(delivery -> logger.info("{} sands to node: <{}>. Next send attempt in: {}",
+                        task.getMessage(), delivery.getNode().getId(), delivery.getNextSendDt()))
                 .forEach(delivery -> executorService.submit(
-                        () -> sendMessagesToNode(task.getMessage(), delivery.getNode())));
+                        () -> sendMessagesToNode(task.getMessage(), delivery.getNode().getAddress())));
     }
 
     private void sendMessagesToNode(Message message, String nodeAddress) {
         try {
-            String url = "http://" + nodeAddress + ":" + internalData.getPort() + "/save_message";
+            String url = "http://" + nodeAddress + "/save_message";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

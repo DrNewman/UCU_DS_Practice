@@ -8,19 +8,19 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-public class MessageDistributionTask {
-    private static final Logger logger = LoggerFactory.getLogger(MessageDistributionTask.class);
+public class MessageReplicationTask {
+    private static final Logger logger = LoggerFactory.getLogger(MessageReplicationTask.class);
 
     private final Message message;
     private volatile String status;
     private final List<MessageDelivery> deliveries;
-    private final int nodesAcceptedThreshold;
+    private final int writeConcern;
 
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    public MessageDistributionTask(Message message, int nodesAcceptedThreshold, List<String> nodes) {
+    public MessageReplicationTask(Message message, int writeConcern, List<Node> nodes) {
         this.message = message;
-        this.nodesAcceptedThreshold = nodesAcceptedThreshold;
+        this.writeConcern = writeConcern;
         deliveries = nodes.stream().map(MessageDelivery::new).toList();
         setStatus("NEW");
     }
@@ -42,8 +42,8 @@ public class MessageDistributionTask {
         return "DONE".equals(status);
     }
 
-    public void addNodeAccepted(String node) {
-        logger.info("Task with {} has been accepted by node <{}>", message, node);
+    public void addNodeAccepted(Node node) {
+        logger.info("Task with {} has been accepted by node <{}>", message, node.getId());
         synchronized (deliveries) {
             Optional<MessageDelivery> delivery = deliveries.stream()
                     .filter(d -> d.getNode().equals(node))
@@ -54,7 +54,7 @@ public class MessageDistributionTask {
             int done = getDeliveriesInStatus("DELIVERED").size();
             if (done == deliveries.size()) {
                 setStatus("DONE");
-            } else if (done >= nodesAcceptedThreshold) {
+            } else if (done >= writeConcern) {
                 setStatus("CONCERNED");
             }
         }

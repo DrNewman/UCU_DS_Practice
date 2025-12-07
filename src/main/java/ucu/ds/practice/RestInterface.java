@@ -11,7 +11,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -37,14 +36,16 @@ public class RestInterface {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Follower cannot receive new messages from clients.");
         }
+        if (internalData.hasNoQuorum()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "New messages saving is temporarily unavailable. Please try again later.");
+        }
         if (message == null || message.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message is empty.");
         }
 
         Message newMessage = new Message(internalData.getNextMessageId(), message);
-        List<String> nodes = new ArrayList<>(internalData.getExternalNodes());
-        nodes.add(internalData.getNodeId());
-        MessageDistributionTask task = new MessageDistributionTask(newMessage, writeConcern, nodes);
+        MessageReplicationTask task = new MessageReplicationTask(newMessage, writeConcern, internalData.getAllNodes());
         logger.info("Task with {} on node <{}> has been added to process", newMessage, internalData.getNodeId());
         internalData.addTask(task);
 
@@ -77,12 +78,17 @@ public class RestInterface {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Request parameters 'node_id' and 'message_id' are required.");
         }
+        Node node = internalData.getNodeById(nodeId);
+        if (node == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Request parameter 'node_id' contains unknown node.");
+        }
         if ("OK".equals(message)) {
             internalData.getTasks().stream()
                     .filter(t -> !t.isDone())
                     .filter(t -> messageId.equals(t.getMessage().getId()))
                     .findFirst()
-                    .ifPresent(task -> task.addNodeAccepted(nodeId));
+                    .ifPresent(task -> task.addNodeAccepted(node));
         }
         return "OK";
     }
@@ -104,11 +110,52 @@ public class RestInterface {
         if (message == null || message.getMessage() == null || message.getMessage().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message is empty.");
         }
+
+        if (internalData.getStatus().equals("SLOW") && internalData.getNodeDelaySec() > 0) {
+            logger.info("{} should be saved with delay on node <{}>", message, internalData.getNodeId());
+            try {
+                Thread.sleep(internalData.getNodeDelaySec() * 1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warn("Sleep interrupted for {}", message);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error: Operation interrupted");
+            }
+        }
+
         internalData.saveMessage(message);
         logger.info("{} on node <{}> has been successfully saved", message, internalData.getNodeId());
 
         sendAcknowledgment(message);
         return "OK";
+    }
+
+    @PostMapping("/health_report")
+    public String healthReport(@RequestBody String message,
+                               @RequestParam(value = "node_id") String nodeId) {
+        if (internalData.isFollower()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Follower cannot receive health reports.");
+        }
+        if (nodeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Request parameter 'node_id' is required.");
+        }
+        Node node = internalData.getNodeById(nodeId);
+        if (node == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Request parameter 'node_id' contains unknown node.");
+        }
+        if ("OK".equals(message)) {
+            node.heartBeatAccepted();
+        }
+        return "OK";
+    }
+
+    @GetMapping("/health")
+    public String getHealth() {
+        return internalData.getExternalNodes().stream()
+                .map(node -> "Node <%s> is '%s'. Last heart-beat was %s"
+                        .formatted(node.getId(), node.getHealthStatus(), node.getLastHeartbeat().toString()))
+                .reduce("", (a, b) -> a + "\n" + b);
     }
 
     @PostMapping("/command")
