@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -28,42 +27,39 @@ public class MessagesReplicationService {
     @Autowired
     private Messages messages;
 
-    @Autowired
-    private MessageReplicationTasks messageReplicationTasks;
-
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Scheduled(fixedRate = 1000)
-    public void tryToReplicateToFollowers() {
-        if (!internalData.isLeader()) {
-            return;
-        }
 
-        messageReplicationTasks.getTasks().stream()
-                .filter(t -> !t.isDone())
-                .forEach(this::tryToReplicateToFollowers);
-    }
-
-    public void tryToReplicateToFollowers(MessageReplicationTask task) {
-        if ("NEW".equals(task.getStatus())) {
-            // Зберігаємо повідомлення локально (у лідера)
-            task.setStatus("IN_PROGRESS");
-            messages.saveMessage(task.getMessage());
-            task.addNodeAccepted(nodes.getCurrentNode());
-        }
+    public void replicateToNodes(MessageReplicationTask task) {
+        // Зберігаємо повідомлення локально (у лідера)
+        messages.saveMessage(task.getMessage());
+//        task.addNodeAccepted(nodes.getCurrentNode());
 
         // Розсилаємо іншим
-        List<MessageDelivery> inProgressDeliveries = task.getDeliveriesInStatus("IN_PROGRESS");
-        logger.info("Found {} deliveries in progress for task: {} in status: {}",
-                inProgressDeliveries.size(), task.getMessage(), task.getStatus());
-        inProgressDeliveries.stream()
-                .filter(MessageDelivery::isTimeToTrySend)
-                .peek(MessageDelivery::trySend)
-                .peek(delivery -> logger.info("{} sands to node: <{}>. Next send attempt in: {}",
-                        task.getMessage(), delivery.getNode().getId(), delivery.getNextSendDt()))
-                .forEach(delivery -> executorService.submit(
-                        () -> sendMessagesToNode(task.getMessage(), delivery.getNode().getAddress())));
+        executorService.submit(() -> replicateToFollowers(task));
+    }
+
+
+    private void replicateToFollowers(MessageReplicationTask task) {
+        while (!task.isDone()) {
+            List<MessageDelivery> inProgressDeliveries = task.getDeliveriesInStatus("IN_PROGRESS");
+            logger.info("Found {} deliveries in progress for task: {} in status: {}",
+                    inProgressDeliveries.size(), task.getMessage(), task.getStatus());
+            inProgressDeliveries.stream()
+                    .filter(MessageDelivery::isTimeToTrySend)
+                    .peek(MessageDelivery::trySend)
+                    .peek(delivery -> logger.info("{} sands to node: <{}>. Next send attempt in: {}",
+                            task.getMessage(), delivery.getNode().getId(), delivery.getNextSendDt()))
+                    .forEach(delivery -> executorService.submit(
+                            () -> sendMessagesToNode(task.getMessage(), delivery.getNode().getAddress())));
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warn("Sleep interrupted for {}", task.getMessage());
+            }
+        }
     }
 
     private void sendMessagesToNode(Message message, String nodeAddress) {

@@ -16,4 +16,15 @@ public class MessageReplicationTasks {
     public List<MessageReplicationTask> getTasks() {
         return tasks;
     }
+
+    public void removeTask(MessageReplicationTask task) {
+        tasks.remove(task);
+    }
+
+    public MessageReplicationTask getTaskByMessageId(Integer messageId) {
+        return tasks.stream()
+                .filter(t -> messageId.equals(t.getMessage().getId()))
+                .findFirst()
+                .orElse(null);
+    }
 }

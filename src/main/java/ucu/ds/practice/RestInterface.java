@@ -32,6 +32,9 @@ public class RestInterface {
     @Autowired
     private MessageReplicationTasks messageReplicationTasks;
 
+    @Autowired
+    private MessagesReplicationService messagesReplicationService;
+
     public RestInterface(InternalData internalData) {
         this.internalData = internalData;
     }
@@ -54,15 +57,20 @@ public class RestInterface {
         }
 
         Message newMessage = new Message(internalData.getNextMessageId(), message);
-        MessageReplicationTask task = new MessageReplicationTask(newMessage, writeConcern, nodes.getAllNodes());
+        MessageReplicationTask task = new MessageReplicationTask(newMessage, writeConcern, nodes.getFollowerNodes());
         logger.info("Task with {} on node <{}> has been added to process", newMessage, internalData.getCurrentNodeId());
         messageReplicationTasks.addTask(task);
+        messagesReplicationService.replicateToNodes(task);
+
+        if (writeConcern == 1) {
+            return "OK. Message received and distributed to %d nodes".formatted(writeConcern);
+        }
 
         try {
             boolean completed = task.waitForCompletion(CLIENT_REQUEST_TIMEOUT_SEC);
             if (completed) {
                 logger.info("{} on node <{}> has been successfully processed", newMessage, internalData.getCurrentNodeId());
-                return "OK. Message received and distributed to nodes";
+                return "OK. Message received and distributed to %d nodes".formatted(writeConcern);
             } else {
                 logger.info("{} on node <{}> has been skipped by timeout", newMessage, internalData.getCurrentNodeId());
                 throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT,
@@ -93,11 +101,13 @@ public class RestInterface {
                     "Request parameter 'node_id' contains unknown node.");
         }
         if ("OK".equals(message)) {
-            messageReplicationTasks.getTasks().stream()
-                    .filter(t -> !t.isDone())
-                    .filter(t -> messageId.equals(t.getMessage().getId()))
-                    .findFirst()
-                    .ifPresent(task -> task.addNodeAccepted(node));
+            MessageReplicationTask task = messageReplicationTasks.getTaskByMessageId(messageId);
+            if (task != null) {
+                task.addNodeAccepted(node);
+                if (task.isDone()) {
+                    messageReplicationTasks.removeTask(task);
+                }
+            }
         }
         return "OK";
     }
