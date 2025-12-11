@@ -19,12 +19,6 @@ public class MessagesReplicationService {
     private static final Logger logger = LoggerFactory.getLogger(MessagesReplicationService.class);
 
     @Autowired
-    private InternalData internalData;
-
-    @Autowired
-    private Nodes nodes;
-
-    @Autowired
     private Messages messages;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
@@ -34,7 +28,6 @@ public class MessagesReplicationService {
     public void replicateToNodes(MessageReplicationTask task) {
         // Зберігаємо повідомлення локально (у лідера)
         messages.saveMessage(task.getMessage());
-//        task.addNodeAccepted(nodes.getCurrentNode());
 
         // Розсилаємо іншим
         executorService.submit(() -> replicateToFollowers(task));
