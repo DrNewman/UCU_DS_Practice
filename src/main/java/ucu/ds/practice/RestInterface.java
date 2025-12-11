@@ -23,6 +23,15 @@ public class RestInterface {
     @Autowired
     private final InternalData internalData;
 
+    @Autowired
+    private Nodes nodes;
+
+    @Autowired
+    private Messages messages;
+
+    @Autowired
+    private MessageReplicationTasks messageReplicationTasks;
+
     public RestInterface(InternalData internalData) {
         this.internalData = internalData;
     }
@@ -31,12 +40,12 @@ public class RestInterface {
     public String newMessage(@RequestBody String message,
                              @RequestParam(value = "write_concern", defaultValue = "3") Integer writeConcern) {
         logger.info("Received new message: {} to node <{}> with write_concern: {}",
-                message, internalData.getNodeId(), writeConcern);
+                message, internalData.getCurrentNodeId(), writeConcern);
         if (internalData.isFollower()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Follower cannot receive new messages from clients.");
         }
-        if (internalData.hasNoQuorum()) {
+        if (nodes.hasNoQuorum()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "New messages saving is temporarily unavailable. Please try again later.");
         }
@@ -45,17 +54,17 @@ public class RestInterface {
         }
 
         Message newMessage = new Message(internalData.getNextMessageId(), message);
-        MessageReplicationTask task = new MessageReplicationTask(newMessage, writeConcern, internalData.getAllNodes());
-        logger.info("Task with {} on node <{}> has been added to process", newMessage, internalData.getNodeId());
-        internalData.addTask(task);
+        MessageReplicationTask task = new MessageReplicationTask(newMessage, writeConcern, nodes.getAllNodes());
+        logger.info("Task with {} on node <{}> has been added to process", newMessage, internalData.getCurrentNodeId());
+        messageReplicationTasks.addTask(task);
 
         try {
             boolean completed = task.waitForCompletion(CLIENT_REQUEST_TIMEOUT_SEC);
             if (completed) {
-                logger.info("{} on node <{}> has been successfully processed", newMessage, internalData.getNodeId());
+                logger.info("{} on node <{}> has been successfully processed", newMessage, internalData.getCurrentNodeId());
                 return "OK. Message received and distributed to nodes";
             } else {
-                logger.info("{} on node <{}> has been skipped by timeout", newMessage, internalData.getNodeId());
+                logger.info("{} on node <{}> has been skipped by timeout", newMessage, internalData.getCurrentNodeId());
                 throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT,
                         "Message received, but distribution timed out");
             }
@@ -78,13 +87,13 @@ public class RestInterface {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Request parameters 'node_id' and 'message_id' are required.");
         }
-        Node node = internalData.getNodeById(nodeId);
+        Node node = nodes.getNodeById(nodeId);
         if (node == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Request parameter 'node_id' contains unknown node.");
         }
         if ("OK".equals(message)) {
-            internalData.getTasks().stream()
+            messageReplicationTasks.getTasks().stream()
                     .filter(t -> !t.isDone())
                     .filter(t -> messageId.equals(t.getMessage().getId()))
                     .findFirst()
@@ -95,7 +104,7 @@ public class RestInterface {
 
     @GetMapping("/all_saved_messages")
     public List<Message> getAllSavedMessages() {
-        return internalData.getTotalOrderedMessages();
+        return messages.getTotalOrderedMessages();
     }
 
     @PostMapping("/save_message")
@@ -103,7 +112,7 @@ public class RestInterface {
         if (internalData.getStatus().equals("PAUSED")) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "System is not available.");
         }
-        logger.info("Received {} to save on node <{}>", message, internalData.getNodeId());
+        logger.info("Received {} to save on node <{}>", message, internalData.getCurrentNodeId());
         if (internalData.isLeader()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Leader cannot save messages directly.");
         }
@@ -112,7 +121,7 @@ public class RestInterface {
         }
 
         if (internalData.getStatus().equals("SLOW") && internalData.getNodeDelaySec() > 0) {
-            logger.info("{} should be saved with delay on node <{}>", message, internalData.getNodeId());
+            logger.info("{} should be saved with delay on node <{}>", message, internalData.getCurrentNodeId());
             try {
                 Thread.sleep(internalData.getNodeDelaySec() * 1000);
             } catch (InterruptedException e) {
@@ -122,8 +131,8 @@ public class RestInterface {
             }
         }
 
-        internalData.saveMessage(message);
-        logger.info("{} on node <{}> has been successfully saved", message, internalData.getNodeId());
+        messages.saveMessage(message);
+        logger.info("{} on node <{}> has been successfully saved", message, internalData.getCurrentNodeId());
 
         sendAcknowledgment(message);
         return "OK";
@@ -139,7 +148,7 @@ public class RestInterface {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Request parameter 'node_id' is required.");
         }
-        Node node = internalData.getNodeById(nodeId);
+        Node node = nodes.getNodeById(nodeId);
         if (node == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Request parameter 'node_id' contains unknown node.");
@@ -152,7 +161,7 @@ public class RestInterface {
 
     @GetMapping("/health")
     public String getHealth() {
-        return internalData.getExternalNodes().stream()
+        return nodes.getFollowerNodes().stream()
                 .map(node -> "Node <%s> is '%s'. Last heart-beat was %s"
                         .formatted(node.getId(), node.getHealthStatus(), node.getLastHeartbeat().toString()))
                 .reduce("", (a, b) -> a + "\n" + b);
@@ -162,7 +171,7 @@ public class RestInterface {
     public String command(@RequestBody String notUsed,
                           @RequestParam(value = "command") String command,
                           @RequestParam(value = "delay_time", defaultValue = "0") Integer delayTime) {
-        logger.info("Received : '{}' for node <{}>", command, internalData.getNodeId());
+        logger.info("Received : '{}' for node <{}>", command, internalData.getCurrentNodeId());
         if (internalData.isLeader()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Leader cannot receive commands.");
         }
@@ -182,8 +191,8 @@ public class RestInterface {
 
     private void sendAcknowledgment(Message message) {
         try {
-            String url = "http://node-leader:" + internalData.getPort() +"/acknowledgment" +
-                    "?node_id=" + internalData.getNodeId()
+            String url = "http://" + internalData.getLeaderNode() + ":" + internalData.getPort() +"/acknowledgment"
+                    + "?node_id=" + internalData.getCurrentNodeId()
                     + "&message_id=" + message.getId();
 
             HttpHeaders headers = new HttpHeaders();

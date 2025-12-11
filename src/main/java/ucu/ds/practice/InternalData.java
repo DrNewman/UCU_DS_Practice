@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 @Component
 public class InternalData {
@@ -21,22 +20,18 @@ public class InternalData {
     private static final Logger logger = LoggerFactory.getLogger(InternalData.class);
 
     private String status = "FAST";
-    private final Set<Message> messages = new ConcurrentSkipListSet<>();
-    private final List<MessageReplicationTask> tasks = new CopyOnWriteArrayList<>();
 
     @Value("${NODE_ROLE:LEADER}")
     private String nodeRole;
 
     @Value("${NODE_ID:node-leader}")
-    private String nodeId;
-
-    @Value("${PEER_NODES:}")
-    private String peerNodesRaw;
-    private List<Node> externalNodes = Collections.emptyList();
-    private Node currentNode;
+    private String currentNodeId;
 
     @Value("${PORT:" + DEFAULT_PORT + "}")
     private String port;
+
+    @Value("${LEADER_NODE:node-leader}")
+    private String leaderNode;
 
     @Value("${NODE_DELAY_SEC:0}")
     private Integer nodeDelaySec;
@@ -44,48 +39,14 @@ public class InternalData {
     private final AtomicInteger messageIdGenerator = new AtomicInteger(0);
 
     @PostConstruct
-    public void initPeerNodes() {
-        if (peerNodesRaw != null && !peerNodesRaw.isBlank()) {
-            currentNode = new Node(nodeId, port);
-            externalNodes = Stream.of(peerNodesRaw.split(","))
-                    .map(id -> new Node(id, port))
-                    .toList();
-        }
+    public void init() {
         if (!nodeDelaySec.equals(0)) {
             status = "SLOW";
-        }
-        if (isLeader()) {
-            logger.info("Leader-node has followers: {}", externalNodes);
         }
     }
 
     public int getNextMessageId() {
         return messageIdGenerator.incrementAndGet();
-    }
-
-    public void saveMessage(Message message) {
-
-        messages.add(message);
-        logger.info("{} on node <{}> has been saved", message, getNodeId());
-    }
-
-    public List<Message> getAllMessages() {
-        return new ArrayList<>(messages);
-    }
-
-    public List<Message> getTotalOrderedMessages() {
-        List<Message> allMessages = getAllMessages();
-        if (allMessages.isEmpty() || allMessages.get(allMessages.size() - 1).getId() == allMessages.size()) {
-            return allMessages;
-        }
-        if (allMessages.get(0).getId() != 1) {
-            return Collections.emptyList();
-        }
-        int counter = 1;
-        while (allMessages.get(counter - 1).getId() == counter) {
-            counter++;
-        }
-        return allMessages.subList(0, counter);
     }
 
     public String getStatus() {
@@ -108,14 +69,6 @@ public class InternalData {
         this.nodeDelaySec = nodeDelaySec;
     }
 
-    public void addTask(MessageReplicationTask task) {
-        tasks.add(task);
-    }
-    
-    public List<MessageReplicationTask> getTasks() {
-        return tasks;
-    }
-
     public boolean isLeader() {
         return "LEADER".equals(nodeRole);
     }
@@ -124,33 +77,11 @@ public class InternalData {
         return "FOLLOWER".equals(nodeRole);
     }
 
-    public String getNodeId() {
-        return nodeId;
+    public String getCurrentNodeId() {
+        return currentNodeId;
     }
 
-    public Node getCurrentNode() {
-        return currentNode;
-    }
-
-    public List<Node> getExternalNodes() {
-        return externalNodes;
-    }
-
-    public List<Node> getAllNodes() {
-        ArrayList<Node> nodes = new ArrayList<>(externalNodes);
-        nodes.add(currentNode);
-        return nodes;
-    }
-
-    public Node getNodeById(String id) {
-        return getExternalNodes().stream()
-                .filter(n -> id.equals(n.getId()))
-                .findFirst().orElse(null);
-    }
-
-    public boolean hasNoQuorum() {
-        return externalNodes.stream()
-                .filter(node -> !node.getHealthStatus().equals("UNHEALTHY")) // відбираємо робочі ноди
-                .count() < (getAllNodes().size() / 2);
+    public String getLeaderNode() {
+        return leaderNode;
     }
 }

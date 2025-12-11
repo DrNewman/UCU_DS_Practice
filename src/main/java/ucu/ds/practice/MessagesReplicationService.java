@@ -22,6 +22,15 @@ public class MessagesReplicationService {
     @Autowired
     private InternalData internalData;
 
+    @Autowired
+    private Nodes nodes;
+
+    @Autowired
+    private Messages messages;
+
+    @Autowired
+    private MessageReplicationTasks messageReplicationTasks;
+
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -31,7 +40,7 @@ public class MessagesReplicationService {
             return;
         }
 
-        internalData.getTasks().stream()
+        messageReplicationTasks.getTasks().stream()
                 .filter(t -> !t.isDone())
                 .forEach(this::tryToReplicateToFollowers);
     }
@@ -40,8 +49,8 @@ public class MessagesReplicationService {
         if ("NEW".equals(task.getStatus())) {
             // Зберігаємо повідомлення локально (у лідера)
             task.setStatus("IN_PROGRESS");
-            internalData.saveMessage(task.getMessage());
-            task.addNodeAccepted(internalData.getCurrentNode());
+            messages.saveMessage(task.getMessage());
+            task.addNodeAccepted(nodes.getCurrentNode());
         }
 
         // Розсилаємо іншим

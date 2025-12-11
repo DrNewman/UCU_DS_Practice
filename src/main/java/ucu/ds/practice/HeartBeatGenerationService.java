@@ -24,14 +24,14 @@ public class HeartBeatGenerationService {
     @Scheduled(fixedRate = 1000)
     public void heartBeat() {
         if (internalData.isFollower() && !internalData.getStatus().equals("PAUSED")) {
-            sendAcknowledgment();
+            sendBeat();
         }
     }
 
-    private void sendAcknowledgment() {
+    private void sendBeat() {
         try {
-            String url = "http://node-leader:" + internalData.getPort() +"/health_report" +
-                    "?node_id=" + internalData.getNodeId();
+            String url = "http://" + internalData.getLeaderNode() + ":" + internalData.getPort() +"/health_report"
+                    + "?node_id=" + internalData.getCurrentNodeId();
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
