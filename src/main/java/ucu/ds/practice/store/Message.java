@@ -1,4 +1,4 @@
-package ucu.ds.practice;
+package ucu.ds.practice.store;
 
 public class Message implements Comparable<Message> {
     private int id;
