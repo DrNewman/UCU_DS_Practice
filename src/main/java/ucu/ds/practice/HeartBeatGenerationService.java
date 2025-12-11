@@ -2,7 +2,6 @@ package ucu.ds.practice;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,17 +12,19 @@ import org.springframework.web.client.RestTemplate;
 
 @Service
 public class HeartBeatGenerationService {
+    private static final int HEART_BEAT_INTERVAL_MS = 1000;
     private static final Logger logger = LoggerFactory.getLogger(HeartBeatGenerationService.class);
 
     private final RestTemplate restTemplate = new RestTemplate();
+    private final InternalData internalData;
 
-    @Autowired
-    private InternalData internalData;
+    public HeartBeatGenerationService(InternalData internalData) {
+        this.internalData = internalData;
+    }
 
-
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedDelay = HEART_BEAT_INTERVAL_MS)
     public void heartBeat() {
-        if (internalData.isFollower() && !internalData.getStatus().equals("PAUSED")) {
+        if (internalData.isFollower() && internalData.getStatus() != NodeStatus.PAUSED) {
             sendBeat();
         }
     }

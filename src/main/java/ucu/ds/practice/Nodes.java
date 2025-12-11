@@ -3,7 +3,6 @@ package ucu.ds.practice;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -16,8 +15,11 @@ import java.util.stream.Stream;
 public class Nodes {
     private static final Logger logger = LoggerFactory.getLogger(Nodes.class);
 
-    @Autowired
-    private InternalData internalData;
+    private final InternalData internalData;
+
+    public Nodes(InternalData internalData) {
+        this.internalData = internalData;
+    }
 
     @Value("${FOLLOWER_NODES:}")
     private String followerNodesRaw;
@@ -35,10 +37,6 @@ public class Nodes {
             }
             logger.info("Leader-node has followers: {}", followerNodes);
         }
-    }
-
-    public Node getCurrentNode() {
-        return currentNode;
     }
 
     public List<Node> getFollowerNodes() {
@@ -59,7 +57,7 @@ public class Nodes {
 
     public boolean hasNoQuorum() {
         return followerNodes.stream()
-                .filter(node -> !node.getHealthStatus().equals("UNHEALTHY")) // відбираємо робочі ноди
+                .filter(node -> node.getHealthStatus() != NodeHealthStatus.UNHEALTHY) // відбираємо робочі ноди
                 .count() < (getAllNodes().size() / 2);
     }
 }

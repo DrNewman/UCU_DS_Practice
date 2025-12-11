@@ -10,10 +10,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class InternalData {
     private static final String DEFAULT_PORT = "8080";
 
-    private String status = "FAST";
+    private NodeStatus status = NodeStatus.FAST;
 
     @Value("${NODE_ROLE:LEADER}")
-    private String nodeRole;
+    private String nodeRoleRaw;
+    private NodeRole nodeRole;
 
     @Value("${NODE_ID:node-leader}")
     private String currentNodeId;
@@ -32,19 +33,20 @@ public class InternalData {
     @PostConstruct
     public void init() {
         if (!nodeDelaySec.equals(0)) {
-            status = "SLOW";
+            status = NodeStatus.SLOW;
         }
+        nodeRole = NodeRole.valueOf(nodeRoleRaw);
     }
 
     public int getNextMessageId() {
         return messageIdGenerator.incrementAndGet();
     }
 
-    public String getStatus() {
+    public NodeStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(NodeStatus status) {
         this.status = status;
     }
 
@@ -61,11 +63,11 @@ public class InternalData {
     }
 
     public boolean isLeader() {
-        return "LEADER".equals(nodeRole);
+        return nodeRole == NodeRole.LEADER;
     }
 
     public boolean isFollower() {
-        return "FOLLOWER".equals(nodeRole);
+        return nodeRole == NodeRole.FOLLOWER;
     }
 
     public String getCurrentNodeId() {

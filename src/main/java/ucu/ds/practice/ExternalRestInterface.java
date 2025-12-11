@@ -1,7 +1,6 @@
 package ucu.ds.practice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,23 +13,20 @@ public class ExternalRestInterface {
 
     private static final Logger logger = LoggerFactory.getLogger(ExternalRestInterface.class);
 
-    @Autowired
     private final InternalData internalData;
+    private final Nodes nodes;
+    private final Messages messages;
+    private final MessageReplicationTasks messageReplicationTasks;
+    private final MessagesReplicationService messagesReplicationService;
 
-    @Autowired
-    private Nodes nodes;
-
-    @Autowired
-    private Messages messages;
-
-    @Autowired
-    private MessageReplicationTasks messageReplicationTasks;
-
-    @Autowired
-    private MessagesReplicationService messagesReplicationService;
-
-    public ExternalRestInterface(InternalData internalData) {
+    public ExternalRestInterface(InternalData internalData, Nodes nodes, Messages messages,
+                                 MessageReplicationTasks messageReplicationTasks,
+                                 MessagesReplicationService messagesReplicationService) {
         this.internalData = internalData;
+        this.nodes = nodes;
+        this.messages = messages;
+        this.messageReplicationTasks = messageReplicationTasks;
+        this.messagesReplicationService = messagesReplicationService;
     }
 
     @PostMapping("/new_message")
@@ -111,13 +107,13 @@ public class ExternalRestInterface {
         verifyRequestCommand();
 
         switch (command) {
-            case "pause": internalData.setStatus("PAUSED"); break;
-            case "slow": internalData.setStatus("SLOW");
+            case "pause": internalData.setStatus(NodeStatus.PAUSED); break;
+            case "slow": internalData.setStatus(NodeStatus.SLOW);
                 if (delayTime != 0) {
                     internalData.setNodeDelaySec(delayTime);
                 }
                 break;
-            case "fast": internalData.setStatus("FAST"); break;
+            case "fast": internalData.setStatus(NodeStatus.FAST); break;
             default: throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Unknown command. Supported commands: pause, slow, fast");
         }

@@ -13,10 +13,6 @@ public class MessageReplicationTasks {
         tasks.add(task);
     }
 
-    public List<MessageReplicationTask> getTasks() {
-        return tasks;
-    }
-
     public void removeTask(MessageReplicationTask task) {
         tasks.remove(task);
     }

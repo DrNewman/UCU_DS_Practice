@@ -2,7 +2,6 @@ package ucu.ds.practice;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,27 +15,33 @@ import java.util.concurrent.Executors;
 
 @Service
 public class MessagesReplicationService {
+    private static final int SEND_RETRY_INTERVAL_MS = 1000;
     private static final Logger logger = LoggerFactory.getLogger(MessagesReplicationService.class);
 
-    @Autowired
-    private Messages messages;
+    private final Messages messages;
 
-    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+    private final ExecutorService replicationExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService networkExecutor = Executors.newFixedThreadPool(10);
+    
     private final RestTemplate restTemplate = new RestTemplate();
+
+    public MessagesReplicationService(Messages messages) {
+        this.messages = messages;
+    }
 
 
     public void replicateToNodes(MessageReplicationTask task) {
         // Зберігаємо повідомлення локально (у лідера)
         messages.saveMessage(task.getMessage());
 
-        // Розсилаємо іншим
-        executorService.submit(() -> replicateToFollowers(task));
+        // Розсилаємо іншим - використовуємо replicationExecutor
+        replicationExecutor.submit(() -> replicateToFollowers(task));
     }
 
 
     private void replicateToFollowers(MessageReplicationTask task) {
         while (!task.isDone()) {
-            List<MessageDelivery> inProgressDeliveries = task.getDeliveriesInStatus("IN_PROGRESS");
+            List<MessageDelivery> inProgressDeliveries = task.getDeliveriesInProgress();
             logger.info("Found {} deliveries in progress for task: {} in status: {}",
                     inProgressDeliveries.size(), task.getMessage(), task.getStatus());
             inProgressDeliveries.stream()
@@ -44,10 +49,11 @@ public class MessagesReplicationService {
                     .peek(MessageDelivery::trySend)
                     .peek(delivery -> logger.info("{} sands to node: <{}>. Next send attempt in: {}",
                             task.getMessage(), delivery.getNode().getId(), delivery.getNextSendDt()))
-                    .forEach(delivery -> executorService.submit(
+                    // Використовуємо networkExecutor для відправки
+                    .forEach(delivery -> networkExecutor.submit(
                             () -> sendMessagesToNode(task.getMessage(), delivery.getNode().getAddress())));
             try {
-                Thread.sleep(1000);
+                Thread.sleep(SEND_RETRY_INTERVAL_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logger.warn("Sleep interrupted for {}", task.getMessage());

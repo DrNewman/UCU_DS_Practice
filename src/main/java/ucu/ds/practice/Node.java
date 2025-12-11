@@ -3,8 +3,8 @@ package ucu.ds.practice;
 import java.time.LocalDateTime;
 
 public class Node {
-    private final  String id;
-    private String port;
+    private final String id;
+    private final String port;
     private LocalDateTime lastHeartbeat;
 
     public Node(String id, String port) {
@@ -13,15 +13,15 @@ public class Node {
         this.lastHeartbeat = LocalDateTime.now();
     }
 
-    public String getHealthStatus() {
+    public NodeHealthStatus getHealthStatus() {
         LocalDateTime now = LocalDateTime.now();
         if (lastHeartbeat.isBefore(now.minusSeconds(60))) {
-            return "UNHEALTHY";
+            return NodeHealthStatus.UNHEALTHY;
         }
         if (lastHeartbeat.isBefore(now.minusSeconds(3))) {
-            return "SUSPECTED";
+            return NodeHealthStatus.SUSPECTED;
         }
-        return "HEALTHY";
+        return NodeHealthStatus.HEALTHY;
     }
 
     public void heartBeatAccepted() {
@@ -39,10 +39,6 @@ public class Node {
     public LocalDateTime getLastHeartbeat() {
         return lastHeartbeat;
     }
-
-//    public void setHealthStatus(String healthStatus) {
-//        this.healthStatus = healthStatus;
-//    }
 
     @Override
     public String toString() {

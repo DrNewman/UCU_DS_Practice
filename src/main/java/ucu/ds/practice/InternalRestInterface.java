@@ -1,7 +1,6 @@
 package ucu.ds.practice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -16,21 +15,17 @@ public class InternalRestInterface {
 
     private static final Logger logger = LoggerFactory.getLogger(InternalRestInterface.class);
     private final RestTemplate restTemplate = new RestTemplate();
-
-    @Autowired
     private final InternalData internalData;
+    private final Nodes nodes;
+    private final Messages messages;
+    private final MessageReplicationTasks messageReplicationTasks;
 
-    @Autowired
-    private Nodes nodes;
-
-    @Autowired
-    private Messages messages;
-
-    @Autowired
-    private MessageReplicationTasks messageReplicationTasks;
-
-    public InternalRestInterface(InternalData internalData) {
+    public InternalRestInterface(InternalData internalData, Nodes nodes, Messages messages,
+                                 MessageReplicationTasks messageReplicationTasks) {
         this.internalData = internalData;
+        this.nodes = nodes;
+        this.messages = messages;
+        this.messageReplicationTasks = messageReplicationTasks;
     }
 
     @PostMapping("/acknowledgment")
@@ -81,7 +76,7 @@ public class InternalRestInterface {
     }
 
     private void verifyRequestSaveMessage(Message message) {
-        if (internalData.getStatus().equals("PAUSED")) {
+        if (internalData.getStatus() == NodeStatus.PAUSED) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "System is not available.");
         }
         logger.info("Received {} to save on node <{}>", message, internalData.getCurrentNodeId());
@@ -94,7 +89,7 @@ public class InternalRestInterface {
     }
 
     private void waitIfNodeIsSlow(Message message) {
-        if (internalData.getStatus().equals("SLOW") && internalData.getNodeDelaySec() > 0) {
+        if (internalData.getStatus() == NodeStatus.SLOW && internalData.getNodeDelaySec() > 0) {
             logger.info("{} should be saved with delay on node <{}>", message, internalData.getCurrentNodeId());
             try {
                 Thread.sleep(internalData.getNodeDelaySec() * 1000);

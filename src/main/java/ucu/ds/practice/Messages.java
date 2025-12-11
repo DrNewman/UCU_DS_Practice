@@ -2,7 +2,6 @@ package ucu.ds.practice;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -15,8 +14,11 @@ import java.util.concurrent.ConcurrentSkipListSet;
 public class Messages {
     private static final Logger logger = LoggerFactory.getLogger(Messages.class);
 
-    @Autowired
-    private InternalData internalData;
+    private final InternalData internalData;
+
+    public Messages(InternalData internalData) {
+        this.internalData = internalData;
+    }
 
     private final Set<Message> messages = new ConcurrentSkipListSet<>();
 
