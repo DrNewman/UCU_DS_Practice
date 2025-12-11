@@ -1,4 +1,4 @@
-package ucu.ds.practice;
+package ucu.ds.practice.cooperation;
 
 import java.time.LocalDateTime;
 

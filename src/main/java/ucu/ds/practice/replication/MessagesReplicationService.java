@@ -1,4 +1,4 @@
-package ucu.ds.practice;
+package ucu.ds.practice.replication;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import ucu.ds.practice.store.Message;
+import ucu.ds.practice.store.Messages;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;

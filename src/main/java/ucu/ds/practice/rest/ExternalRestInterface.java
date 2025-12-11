@@ -1,9 +1,17 @@
-package ucu.ds.practice;
+package ucu.ds.practice.rest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import ucu.ds.practice.*;
+import ucu.ds.practice.NodeStatus;
+import ucu.ds.practice.cooperation.Nodes;
+import ucu.ds.practice.replication.MessageReplicationTask;
+import ucu.ds.practice.replication.MessageReplicationTasks;
+import ucu.ds.practice.replication.MessagesReplicationService;
+import ucu.ds.practice.store.Message;
+import ucu.ds.practice.store.Messages;
 
 import java.util.List;
 

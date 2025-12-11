@@ -1,4 +1,4 @@
-package ucu.ds.practice;
+package ucu.ds.practice.replication;
 
 import org.springframework.stereotype.Component;
 

@@ -1,7 +1,9 @@
-package ucu.ds.practice;
+package ucu.ds.practice.replication;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ucu.ds.practice.store.Message;
+import ucu.ds.practice.cooperation.Node;
 
 import java.util.List;
 import java.util.Optional;

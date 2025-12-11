@@ -1,4 +1,4 @@
-package ucu.ds.practice;
+package ucu.ds.practice.rest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -9,6 +9,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import ucu.ds.practice.*;
+import ucu.ds.practice.NodeStatus;
+import ucu.ds.practice.cooperation.Nodes;
+import ucu.ds.practice.replication.MessageReplicationTask;
+import ucu.ds.practice.replication.MessageReplicationTasks;
+import ucu.ds.practice.store.Message;
+import ucu.ds.practice.store.Messages;
 
 @RestController
 public class InternalRestInterface {

@@ -1,8 +1,9 @@
-package ucu.ds.practice;
+package ucu.ds.practice.store;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import ucu.ds.practice.InternalData;
 
 import java.util.ArrayList;
 import java.util.Collections;

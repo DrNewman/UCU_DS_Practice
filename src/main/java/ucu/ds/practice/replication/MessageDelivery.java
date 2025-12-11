@@ -1,4 +1,7 @@
-package ucu.ds.practice;
+package ucu.ds.practice.replication;
+
+import ucu.ds.practice.cooperation.Node;
+import ucu.ds.practice.cooperation.NodeHealthStatus;
 
 import java.time.LocalDateTime;
 
